@@ -1,0 +1,67 @@
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+class Movie(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    release_year = db.Column(db.Integer, nullable=False)
+    user_ratings = db.Column(db.Float, nullable=False)
+    genres = db.relationship('Genre', secondary='movie_genre')
+    actors = db.relationship('Actor', secondary='movie_actor')
+
+class Genre(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+
+class Actor(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+
+class MovieGenre(db.Model):
+    movie_id = db.Column(db.Integer, db.ForeignKey('movie.id'), primary_key=True)
+    genre_id = db.Column(db.Integer, db.ForeignKey('genre.id'), primary_key=True)
+
+class MovieActor(db.Model):
+    movie_id = db.Column(db.Integer, db.ForeignKey('movie.id'), primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey('actor.id'), primary_key=True)
+
+
+from flask import Flask, request
+from flask_restful import Resource, Api
+
+app = Flask(__name__)
+api = Api(app)
+
+class MovieResource(Resource):
+    def get(self, movie_id):
+        movie = Movie.query.get(movie_id)
+        return {'name': movie.name, 'release_year': movie.release_year, 'user_ratings': movie.user_ratings}
+
+    def post(self):
+        args = request.get_json()
+        movie = Movie(name=args['name'], release_year=args['release_year'], user_ratings=args['user_ratings'])
+        db.session.add(movie)
+        db.session.commit()
+        return {'id': movie.id}
+
+api.add_resource(MovieResource, '/movie/<int:movie_id>', '/movie')
+
+class MoviesResource(Resource):
+    def get(self):
+        movies = Movie.query.all()
+        return [{'id': movie.id, 'name': movie.name, 'release_year': movie.release_year, 'user_ratings': movie.user_ratings} for movie in movies]
+
+api.add_resource(MoviesResource, '/movies')
+
+class ActorResource(Resource):
+    def delete(self, actor_id):
+        actor = Actor.query.get(actor_id)
+        if not actor.movies:
+            db.session.delete(actor)
+            db.session.commit()
+            return {'status': 'success'}
+        else:
+            return {'status': 'failure', 'message': 'Actor is associated with movies'}
+
+api.add_resource(ActorResource, '/actor/<int:actor_id>')
